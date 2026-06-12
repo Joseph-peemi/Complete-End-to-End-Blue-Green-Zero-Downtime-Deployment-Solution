@@ -1,6 +1,7 @@
+
+
 # ── ECS Task Execution Role ───────────────────────────────────────────────────
-# This role is assumed by the ECS AGENT (not your app) to pull images and
-# write logs on your containers' behalf.
+# Assumed by the ECS AGENT to pull images and write logs.
 
 data "aws_iam_policy_document" "ecs_assume_role" {
   statement {
@@ -17,6 +18,13 @@ resource "aws_iam_role" "ecs_task_execution" {
   assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
 }
 
+# AWS managed policy — grants ECR pull + CloudWatch logs write
+resource "aws_iam_role_policy_attachment" "ecs_execution_managed" {
+  role       = aws_iam_role.ecs_task_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+# Custom policy — grants Secrets Manager + SSM access
 resource "aws_iam_policy" "ecs_execution_secrets" {
   name = "${var.project_name}-ecs-secrets-policy"
 
@@ -45,8 +53,7 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_secrets" {
 }
 
 # ── ECS Task Role ─────────────────────────────────────────────────────────────
-# This role is assumed by YOUR APPLICATION CODE inside the container.
-# Separate from the execution role — principle of least privilege.
+# Assumed by YOUR APPLICATION CODE inside the running container.
 
 resource "aws_iam_role" "ecs_task" {
   name               = "${var.project_name}-ecs-task-role"
@@ -85,31 +92,56 @@ resource "aws_iam_role_policy_attachment" "ecs_task" {
   policy_arn = aws_iam_policy.ecs_task_permissions.arn
 }
 
-# ── GitHub Actions Deploy Role ────────────────────────────────────────────────
-# Role assumed by GitHub Actions via OIDC — no long-lived access keys needed.
+# ── GitHub OIDC Provider ──────────────────────────────────────────────────────
+# Creates the provider if it doesn't exist.
+# If you already created it manually, import it first:
+# terraform import aws_iam_openid_connect_provider.github \
+#   arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com
 
-data "aws_iam_openid_connect_provider" "github" {
+resource "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com"
+  ]
+
+  thumbprint_list = [
+    "6938fd4d98bab03faadb97b34396831e3780aea1",
+    "1c58a3a8518e8759bf075b76b750d4f2df264fcd"  # backup thumbprint
+  ]
 }
+
+# ── GitHub Actions Deploy Role ────────────────────────────────────────────────
 
 data "aws_iam_policy_document" "github_actions_assume" {
   statement {
     actions = ["sts:AssumeRoleWithWebIdentity"]
+
     principals {
       type        = "Federated"
-      identifiers = [data.aws_iam_openid_connect_provider.github.arn]
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
     }
+
+    # Locks the role to your specific repo and any branch/tag/PR
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
       values   = ["repo:${var.github_org}/${var.github_repo}:*"]
     }
+
+    # Required by AWS — must be sts.amazonaws.com
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
   }
 }
 
 resource "aws_iam_role" "github_actions_deploy" {
-  name               = "${var.project_name}-github-deploy-role"
-  assume_role_policy = data.aws_iam_policy_document.github_actions_assume.json
+  name                 = "${var.project_name}-github-deploy-role"
+  assume_role_policy   = data.aws_iam_policy_document.github_actions_assume.json
+  max_session_duration = 3600
 }
 
 resource "aws_iam_policy" "github_actions_deploy" {
@@ -122,7 +154,7 @@ resource "aws_iam_policy" "github_actions_deploy" {
         Sid      = "ECRAuth"
         Effect   = "Allow"
         Action   = ["ecr:GetAuthorizationToken"]
-        Resource = "*" # GetAuthorizationToken cannot be scoped to a repo
+        Resource = "*"
       },
       {
         Sid    = "ECRPush"
@@ -191,3 +223,8 @@ resource "aws_iam_role_policy_attachment" "github_actions_deploy" {
   role       = aws_iam_role.github_actions_deploy.name
   policy_arn = aws_iam_policy.github_actions_deploy.arn
 }
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+
+
+
