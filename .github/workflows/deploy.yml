@@ -107,21 +107,13 @@ jobs:
           cache-to:   type=inline       # reuses layers from :candidate on next run
 
       - name: Scan image with Trivy
-        run: |
-          # Install Trivy
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin v0.50.0
-
-          # Scan directly — AWS credentials from configure-aws-credentials step
-          # are already in the environment, Trivy picks them up automatically
-          trivy image \
-            --scanners vuln \
-            --severity CRITICAL \
-            --exit-code 1 \
-            --no-progress \
-            "${{ steps.meta.outputs.image-uri }}"
-        env:
-          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
+        uses: aquasecurity/trivy-action@0.30.0
+        with:
+          image-ref:  ${{ steps.meta.outputs.image-uri }}
+          format:     table
+          exit-code:  "1"            
+          severity:   CRITICAL,HIGH
+          scanners:   vuln
 
 # ─────────────────────────────────────────────────────────────
 # JOB 3 — Deploy to idle slot (green) and validate health
