@@ -106,20 +106,22 @@ jobs:
           cache-from: type=registry,ref=${{ steps.meta.outputs.ecr-url }}:candidate
           cache-to:   type=inline       # reuses layers from :candidate on next run
 
-      - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.meta.outputs.image-uri }}
-          format:    table
-          exit-code: "1"               # fail pipeline on CRITICAL CVEs
-          scanners: "vuln"
-          scan-type: "image"
+      - name: Scan image with Trivy
+        run: |
+          # Install Trivy
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b /usr/local/bin v0.50.0
+
+          # Scan directly — AWS credentials from configure-aws-credentials step
+          # are already in the environment, Trivy picks them up automatically
+          trivy image \
+            --scanners vuln \
+            --severity CRITICAL \
+            --exit-code 1 \
+            --no-progress \
+            "${{ steps.meta.outputs.image-uri }}"
         env:
-          AWS_ACCESS_KEY_ID:     ${{ env.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ env.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION:    ${{ env.AWS_REGION }}
-          TRIVY_USERNAME:        AWS
-          TRIVY_PASSWORD:        ${{ steps.ecr-login.outputs.docker_password }}
+          AWS_DEFAULT_REGION: ${{ env.AWS_REGION }}
 
 # ─────────────────────────────────────────────────────────────
 # JOB 3 — Deploy to idle slot (green) and validate health
