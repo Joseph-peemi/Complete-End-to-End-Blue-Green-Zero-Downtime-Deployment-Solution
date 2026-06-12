@@ -115,10 +115,13 @@ jobs:
           cache-to:   type=inline       # reuses layers from :candidate on next run
       - name: Verify push succeeded
         run: |
-          echo "Checking ECR for: ${{ steps.meta.outputs.sha-tag }}"
+          IMAGE_TAG="sha-${{ steps.meta.outputs.sha-tag }}"
+
+          echo "Checking ECR for: $IMAGE_TAG"
+
           aws ecr describe-images \
-            --repository-name ${{ env.ECR_REPO }} \
-            --image-ids imageTag=${{ steps.meta.outputs.sha-tag }} \
+            --repository-name "${{ env.ECR_REPO }}" \
+            --image-ids imageTag="$IMAGE_TAG" \
             --query 'imageDetails[0].imageTags' \
             --output text
 
