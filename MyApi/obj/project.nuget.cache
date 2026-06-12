@@ -1,11 +1,16 @@
 {
   "version": 2,
-  "dgSpecHash": "Oka5cY8G0Ks=",
+  "dgSpecHash": "WTSkv1Kye7Q=",
   "success": true,
   "projectFilePath": "/Users/josephabuchi/Desktop/DevOps-Class/2026 projects/Complete End-to-End Blue-Green Zero-Downtime Deployment Solution/MyApi/MyApi.csproj",
   "expectedPackageFiles": [
     "/Users/josephabuchi/.nuget/packages/microsoft.aspnetcore.openapi/10.0.6/microsoft.aspnetcore.openapi.10.0.6.nupkg.sha512",
-    "/Users/josephabuchi/.nuget/packages/microsoft.openapi/2.0.0/microsoft.openapi.2.0.0.nupkg.sha512"
+    "/Users/josephabuchi/.nuget/packages/microsoft.extensions.apidescription.server/10.0.0/microsoft.extensions.apidescription.server.10.0.0.nupkg.sha512",
+    "/Users/josephabuchi/.nuget/packages/microsoft.openapi/2.7.5/microsoft.openapi.2.7.5.nupkg.sha512",
+    "/Users/josephabuchi/.nuget/packages/swashbuckle.aspnetcore/10.2.1/swashbuckle.aspnetcore.10.2.1.nupkg.sha512",
+    "/Users/josephabuchi/.nuget/packages/swashbuckle.aspnetcore.swagger/10.2.1/swashbuckle.aspnetcore.swagger.10.2.1.nupkg.sha512",
+    "/Users/josephabuchi/.nuget/packages/swashbuckle.aspnetcore.swaggergen/10.2.1/swashbuckle.aspnetcore.swaggergen.10.2.1.nupkg.sha512",
+    "/Users/josephabuchi/.nuget/packages/swashbuckle.aspnetcore.swaggerui/10.2.1/swashbuckle.aspnetcore.swaggerui.10.2.1.nupkg.sha512"
   ],
   "logs": []
 }
