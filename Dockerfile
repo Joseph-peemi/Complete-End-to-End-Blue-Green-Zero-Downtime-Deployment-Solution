@@ -2,41 +2,41 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy project files first for layer caching
+# Copy solution structure
 COPY MyApi/MyApi.csproj MyApi/
 COPY MyApi.Tests/MyApi.Tests.csproj MyApi.Tests/
 
-RUN dotnet restore MyApi/MyApi.csproj
+# Restore EVERYTHING (not just API project)
+RUN dotnet restore
 
-# Copy source code
+# Copy full source
 COPY MyApi/ MyApi/
 COPY MyApi.Tests/ MyApi.Tests/
 
 # Run tests
 RUN dotnet test MyApi.Tests/MyApi.Tests.csproj \
-    --configuration Release \
+    -c Release \
     --no-restore \
     --logger "console;verbosity=minimal"
 
-# Publish application
+# Publish API
 RUN dotnet publish MyApi/MyApi.csproj \
-    --configuration Release \
+    -c Release \
     --no-restore \
-    --output /app/publish
+    -o /app/publish
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
-
 WORKDIR /app
 
-# Create non-root user
+# Create non-root user (works on Debian-based images)
 RUN groupadd -r appgroup && \
-    useradd -r -g appgroup -d /app -s /sbin/nologin appuser
+    useradd -r -g appgroup -d /app -s /usr/sbin/nologin appuser
 
-# Copy published application
+# Copy published output
 COPY --from=build /app/publish .
 
-# Set ownership
+# Permissions
 RUN chown -R appuser:appgroup /app
 
 USER appuser
