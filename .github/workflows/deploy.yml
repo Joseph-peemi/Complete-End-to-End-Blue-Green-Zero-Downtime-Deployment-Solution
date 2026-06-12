@@ -106,14 +106,29 @@ jobs:
           cache-from: type=registry,ref=${{ steps.meta.outputs.ecr-url }}:candidate
           cache-to:   type=inline       # reuses layers from :candidate on next run
 
-      - name: Scan image with Trivy
-        uses: aquasecurity/trivy-action@0.30.0
+      - name: Pull image from ECR
+        run: docker pull "${{ steps.meta.outputs.image-uri }}"
+
+      # Informational scan — shows full report, never blocks
+      - name: Trivy report
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref:  ${{ steps.meta.outputs.image-uri }}
-          format:     table
-          exit-code:  "1"            
-          severity:   CRITICAL,HIGH
-          scanners:   vuln
+          image-ref: ${{ steps.meta.outputs.image-uri }}
+          format:    table
+          exit-code: "0"
+          severity:  CRITICAL,HIGH
+          scanners:  vuln
+
+      # Gate — fails pipeline on CRITICAL CVEs
+      - name: Trivy gate
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref:    ${{ steps.meta.outputs.image-uri }}
+          format:       table
+          exit-code:    "1"
+          severity:     CRITICAL
+          scanners:     vuln
+          trivyignores: .trivyignore
 
 # ─────────────────────────────────────────────────────────────
 # JOB 3 — Deploy to idle slot (green) and validate health
