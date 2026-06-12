@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "Oka5cY8G0Ks=",
+  "success": true,
+  "projectFilePath": "/Users/josephabuchi/Desktop/DevOps-Class/2026 projects/Complete End-to-End Blue-Green Zero-Downtime Deployment Solution/MyApi/MyApi.csproj",
+  "expectedPackageFiles": [
+    "/Users/josephabuchi/.nuget/packages/microsoft.aspnetcore.openapi/10.0.6/microsoft.aspnetcore.openapi.10.0.6.nupkg.sha512",
+    "/Users/josephabuchi/.nuget/packages/microsoft.openapi/2.0.0/microsoft.openapi.2.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}
