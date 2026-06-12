@@ -35,7 +35,7 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore dependencies
-        run: dotnet restore src/MyApi/MyApi.csproj
+        run: dotnet restore MyApi.Tests/MyApi.Tests.csproj
 
       - name: Build
         run: dotnet build MyApi.Tests/MyApi.Tests.csproj \
@@ -44,7 +44,7 @@ jobs:
 
       - name: Test with coverage
         run: |
-          dotnet test src/MyApi.Tests/MyApi.Tests.csproj \
+          dotnet test MyApi.Tests/MyApi.Tests.csproj \
             --configuration Release \
             --no-restore \
             --collect:"XPlat Code Coverage" \
