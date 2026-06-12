@@ -97,7 +97,7 @@ jobs:
           IMAGE_TAG="sha-${SHA}"
           IMAGE_URI="${ECR_URL}:${IMAGE_TAG}"
 
-          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "sha-tag=${GITHUB_SHA}" >> $GITHUB_OUTPUT
           echo "image-uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
           echo "ecr-url=${ECR_URL}"     >> $GITHUB_OUTPUT
 
@@ -109,7 +109,7 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ steps.meta.outputs.ecr-url }}:sha-${{ steps.meta.outputs.image-tag }}
+            ${{ steps.meta.outputs.ecr-url }}:sha-${{ steps.meta.outputs.sha-tag }}
             ${{ steps.meta.outputs.ecr-url }}:candidate
           cache-from: type=registry,ref=${{ steps.meta.outputs.ecr-url }}:candidate
           cache-to:   type=inline       # reuses layers from :candidate on next run
