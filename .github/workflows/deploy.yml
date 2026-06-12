@@ -38,7 +38,8 @@ jobs:
         run: dotnet restore MyApi/MyApi.csproj
 
       - name: Build
-        run: dotnet build MyApi/MyApi.csproj \
+        run: |
+          dotnet build MyApi/MyApi.csproj \
                --configuration Release \
                --no-restore
 
