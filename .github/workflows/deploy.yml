@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:        # allows manual trigger from GitHub UI
 
+  # Required for OIDC authentication to AWS
+permissions:
+  id-token: write   # allows GitHub to request OIDC token
+  contents: read    # allows checkout
 env:
   AWS_REGION:       us-east-1
   ECR_REPO:         aspnetapp-production
