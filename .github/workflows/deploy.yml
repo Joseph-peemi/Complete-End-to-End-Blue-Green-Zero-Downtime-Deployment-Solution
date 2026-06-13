@@ -12,12 +12,12 @@ on:
 env:
   AWS_REGION:       us-east-1
   ECR_REPO:         aspnetapp-production
-  ECS_CLUSTER:      aspnetapp-cluster
+  ECS_CLUSTER:      blue-green-deployment-cluster
   SERVICE_BLUE:     svc-blue
   SERVICE_GREEN:    svc-green
   TASK_FAMILY_BLUE: aspnetapp-blue
   TASK_FAMILY_GREEN: aspnetapp-green
-  CONTAINER_NAME:   aspnetapp
+  CONTAINER_NAME:   app-container
   HEALTH_PATH:      /health
 
 jobs:
@@ -236,16 +236,31 @@ jobs:
         run: |
           SLOT=${{ steps.slot.outputs.deploy-slot }}
 
+          echo "Cluster: ${{ env.ECS_CLUSTER }}"
+          echo "Service: svc-${SLOT}"
+          echo "Task Definition: ${{ steps.task-def.outputs.task-def-arn }}"
+
+          # Verify cluster exists
+          aws ecs describe-clusters \
+            --clusters "${{ env.ECS_CLUSTER }}"
+
+          # Verify service exists
+          aws ecs describe-services \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "svc-${SLOT}"
+
+          # Deploy new task definition
           aws ecs update-service \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --service svc-${SLOT} \
-            --task-definition ${{ steps.task-def.outputs.task-def-arn }} \
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --service "svc-${SLOT}" \
+            --task-definition "${{ steps.task-def.outputs.task-def-arn }}" \
             --force-new-deployment
 
           echo "Waiting for svc-${SLOT} to stabilise..."
+
           aws ecs wait services-stable \
-            --cluster ${{ env.ECS_CLUSTER }} \
-            --services svc-${SLOT}
+            --cluster "${{ env.ECS_CLUSTER }}" \
+            --services "svc-${SLOT}"
 
           echo "svc-${SLOT} is stable"
 
