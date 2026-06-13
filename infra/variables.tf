@@ -68,7 +68,7 @@ variable "task_memory" {
 variable "container_name" {
   description = "Name of the container in the task definition (used for logging and load balancer)"
   type        = string
-  default     = "app-container"
+  default     = "aspnetapp"
 }
 variable "container_port" {
   description = "Port on which the container listens (used for health checks and load balancer)"

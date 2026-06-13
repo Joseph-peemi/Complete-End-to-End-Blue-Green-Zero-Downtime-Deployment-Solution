@@ -1,5 +1,21 @@
 # ── Metric Alarms ─────────────────────────────────────────────────────────────
+# ── Log Groups ────────────────────────────────────────────────────────────────
+# Declared here because cloudwatch.tf references them in the dashboard.
+# ECS tasks also reference these via awslogs-group in the task definition.
 
+resource "aws_cloudwatch_log_group" "blue" {
+  name              = "/ecs/aspnetapp/blue"
+  retention_in_days = 30
+
+  tags = { Name = "aspnetapp-blue-logs" }
+}
+
+resource "aws_cloudwatch_log_group" "green" {
+  name              = "/ecs/aspnetapp/green"
+  retention_in_days = 30
+
+  tags = { Name = "aspnetapp-green-logs" }
+}
 resource "aws_cloudwatch_metric_alarm" "http_5xx" {
   alarm_name          = "${var.project_name}-5xx-rate"
   alarm_description   = "HTTP 5xx error rate exceeds 1%"
