@@ -367,8 +367,9 @@ jobs:
         env:
           DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
           IDLE_SLOT: ${{ needs.deploy-green.outputs.idle-slot }}
+          IMAGE_TAG: ${{ needs.docker-push.outputs.image-tag }}
           IMAGE_URI: ${{ needs.docker-push.outputs.image-uri }}
-          IMAGE_TAG: ${{ needs.docker-push.outputs.sha-tag }}
+
         run: |
           # Use IMAGE_TAG if set, otherwise extract from IMAGE_URI
           if [[ -z "${IMAGE_TAG}" ]]; then
