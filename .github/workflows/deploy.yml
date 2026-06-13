@@ -96,9 +96,14 @@ jobs:
           IMAGE_TAG="sha-${SHA}"
           IMAGE_URI="${ECR_URL}:${IMAGE_TAG}"
 
-          echo "sha-tag=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
           echo "image-uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
           echo "ecr-url=${ECR_URL}"     >> $GITHUB_OUTPUT
+
+          echo "=== Outputs ==="
+          echo "image-tag : ${IMAGE_TAG}"
+          echo "image-uri : ${IMAGE_URI}"
+          echo "ecr-url   : ${ECR_URL}"
 
           echo "Image will be pushed as: ${IMAGE_URI}"
 
@@ -367,24 +372,24 @@ jobs:
         env:
           DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
           IDLE_SLOT: ${{ needs.deploy-green.outputs.idle-slot }}
+          IMAGE_URI: ${{ needs.docker-push.outputs.image-uri }}
           IMAGE_TAG: ${{ needs.docker-push.outputs.image-tag }}
-        run: |
-          echo "Retagging ${IMAGE_TAG} as ${DEPLOY_SLOT}..."
 
-          # Verify IMAGE_TAG is not empty
+        run: |
+          # Use IMAGE_TAG if set, otherwise extract from IMAGE_URI
           if [[ -z "${IMAGE_TAG}" ]]; then
-            echo "ERROR: IMAGE_TAG is empty — cannot retag"
+            echo "image-tag output was empty — extracting from IMAGE_URI"
+            IMAGE_TAG="${IMAGE_URI##*:}"
+            echo "Extracted tag: ${IMAGE_TAG}"
+          fi
+
+          if [[ -z "${IMAGE_TAG}" ]]; then
+            echo "ERROR: Could not determine image tag"
             exit 1
           fi
 
-          # Verify the image exists in ECR first
-          aws ecr describe-images \
-            --repository-name ${{ env.ECR_REPO }} \
-            --image-ids imageTag="${IMAGE_TAG}" \
-            --query 'imageDetails[0].imageTags' \
-            --output text
+          echo "Retagging ${IMAGE_TAG} as ${DEPLOY_SLOT}..."
 
-          # Get the manifest
           MANIFEST=$(aws ecr batch-get-image \
             --repository-name ${{ env.ECR_REPO }} \
             --image-ids imageTag="${IMAGE_TAG}" \
@@ -392,11 +397,10 @@ jobs:
             --output text)
 
           if [[ -z "${MANIFEST}" ]]; then
-            echo "ERROR: Could not fetch manifest for ${IMAGE_TAG}"
+            echo "ERROR: Could not fetch manifest for tag: ${IMAGE_TAG}"
             exit 1
           fi
 
-          # Apply the colour tag
           aws ecr put-image \
             --repository-name ${{ env.ECR_REPO }} \
             --image-tag "${DEPLOY_SLOT}" \
