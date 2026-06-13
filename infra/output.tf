@@ -77,3 +77,10 @@ output "alb_listener_arn" {
   description = "Main HTTP listener ARN — used by switch-traffic.sh"
 }
 
+output "target_group_green_arn" {
+  value = aws_lb_target_group.green.arn
+}
+
+output "target_group_blue_arn" {
+  value = aws_lb_target_group.blue.arn
+}

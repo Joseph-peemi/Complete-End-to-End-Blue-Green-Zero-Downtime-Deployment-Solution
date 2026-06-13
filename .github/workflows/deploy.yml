@@ -3,28 +3,27 @@ name: Blue-Green Deploy — ASP.NET Core on ECS
 on:
   push:
     branches: [main]
-  workflow_dispatch:        # allows manual trigger from GitHub UI
+  workflow_dispatch: # allows manual trigger from GitHub UI
 
   # Required for OIDC authentication to AWS
 # permissions:
 #   id-token: write   # allows GitHub to request OIDC token
 #   contents: read    # allows checkout
 env:
-  AWS_REGION:       us-east-1
-  ECR_REPO:         aspnetapp-production
-  ECS_CLUSTER:      blue-green-deployment-cluster
-  SERVICE_BLUE:     svc-blue
-  SERVICE_GREEN:    svc-green
+  AWS_REGION: us-east-1
+  ECR_REPO: aspnetapp-production
+  ECS_CLUSTER: blue-green-deployment-cluster
+  SERVICE_BLUE: svc-blue
+  SERVICE_GREEN: svc-green
   TASK_FAMILY_BLUE: aspnetapp-blue
   TASK_FAMILY_GREEN: aspnetapp-green
-  CONTAINER_NAME:   app-container
-  HEALTH_PATH:      /health
+  CONTAINER_NAME: app-container
+  HEALTH_PATH: /health
 
 jobs:
-
-# ─────────────────────────────────────────────────────────────
-# JOB 1 — Build and test the .NET application
-# ─────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 1 — Build and test the .NET application
+  # ─────────────────────────────────────────────────────────────
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
@@ -58,22 +57,22 @@ jobs:
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
-        if: always()                  # upload even on test failure
+        if: always() # upload even on test failure
         with:
           name: test-results
           path: coverage/
 
-# ─────────────────────────────────────────────────────────────
-# JOB 2 — Build Docker image and push to ECR
-# ─────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 2 — Build Docker image and push to ECR
+  # ─────────────────────────────────────────────────────────────
   docker-push:
     name: Docker Build & ECR Push
     runs-on: ubuntu-latest
-    needs: build-and-test            # only runs if tests pass
+    needs: build-and-test # only runs if tests pass
 
     outputs:
-      image-tag:  ${{ steps.meta.outputs.image-tag }}
-      image-uri:  ${{ steps.meta.outputs.image-uri }}
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+      image-uri: ${{ steps.meta.outputs.image-uri }}
 
     steps:
       - name: Checkout
@@ -82,9 +81,9 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
@@ -112,7 +111,7 @@ jobs:
             ${{ steps.meta.outputs.ecr-url }}:sha-${{ steps.meta.outputs.sha-tag }}
             ${{ steps.meta.outputs.ecr-url }}:candidate
           cache-from: type=registry,ref=${{ steps.meta.outputs.ecr-url }}:candidate
-          cache-to:   type=inline       # reuses layers from :candidate on next run
+          cache-to: type=inline # reuses layers from :candidate on next run
       - name: Verify push succeeded
         run: |
           IMAGE_TAG="sha-${{ steps.meta.outputs.sha-tag }}"
@@ -134,25 +133,25 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.meta.outputs.image-uri }}
-          format:    table
+          format: table
           exit-code: "0"
-          severity:  CRITICAL,HIGH
-          scanners:  vuln
+          severity: CRITICAL,HIGH
+          scanners: vuln
 
       # Gate — fails pipeline on CRITICAL CVEs
       - name: Trivy gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref:    ${{ steps.meta.outputs.image-uri }}
-          format:       table
-          exit-code:    "1"
-          severity:     CRITICAL
-          scanners:     vuln
+          image-ref: ${{ steps.meta.outputs.image-uri }}
+          format: table
+          exit-code: "1"
+          severity: CRITICAL
+          scanners: vuln
           trivyignores: .trivyignore
 
-# ─────────────────────────────────────────────────────────────
-# JOB 3 — Deploy to idle slot (green) and validate health
-# ─────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 3 — Deploy to idle slot (green) and validate health
+  # ─────────────────────────────────────────────────────────────
   deploy-green:
     name: Deploy to Green
     runs-on: ubuntu-latest
@@ -160,7 +159,7 @@ jobs:
 
     outputs:
       deploy-slot: ${{ steps.slot.outputs.deploy-slot }}
-      idle-slot:   ${{ steps.slot.outputs.idle-slot }}
+      idle-slot: ${{ steps.slot.outputs.idle-slot }}
 
     steps:
       - name: Checkout
@@ -169,9 +168,9 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Detect active slot
         id: slot
@@ -264,9 +263,9 @@ jobs:
 
           echo "svc-${SLOT} is stable"
 
-# ─────────────────────────────────────────────────────────────
-# JOB 4 — Health check validation against green
-# ─────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 4 — Health check validation against green
+  # ─────────────────────────────────────────────────────────────
   health-check:
     name: Health Check Validation
     runs-on: ubuntu-latest
@@ -279,23 +278,23 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Run health check script
         env:
-          ALB_DNS:      ${{ secrets.ALB_DNS_NAME }}
-          DEPLOY_SLOT:  ${{ needs.deploy-green.outputs.deploy-slot }}
-          HEALTH_PATH:  /health
-          HEALTH_PORT:  8080
+          ALB_DNS: ${{ secrets.ALB_DNS_NAME }}
+          DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
+          HEALTH_PATH: /health
+          HEALTH_PORT: 8080
         run: |
           chmod +x scripts/health-check.sh
           ./scripts/health-check.sh
 
       - name: Optional — load test against green
         env:
-          ALB_DNS:     ${{ secrets.ALB_DNS_NAME }}
+          ALB_DNS: ${{ secrets.ALB_DNS_NAME }}
           DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
         run: |
           # Install k6
@@ -315,14 +314,14 @@ jobs:
             --env BASE_URL="http://$ALB_DNS" \
             scripts/load-test.js
 
-# ─────────────────────────────────────────────────────────────
-# JOB 5 — Switch traffic to green
-# ─────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 5 — Switch traffic to green
+  # ─────────────────────────────────────────────────────────────
   switch-traffic:
     name: Switch Traffic to Green
     runs-on: ubuntu-latest
     needs: [deploy-green, health-check]
-    environment: production           # requires manual approval in GitHub UI
+    environment: production # requires manual approval in GitHub UI
 
     steps:
       - name: Checkout
@@ -331,23 +330,23 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Switch ALB weights
         env:
           DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
-          IDLE_SLOT:   ${{ needs.deploy-green.outputs.idle-slot }}
+          IDLE_SLOT: ${{ needs.deploy-green.outputs.idle-slot }}
         run: |
-          chmod +x scripts/switch-traffic.sh
+          chmod +x ./scripts/switch-traffic.sh
           ./scripts/switch-traffic.sh
 
       - name: Retag images (blue = previous stable)
         env:
           DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
-          IDLE_SLOT:   ${{ needs.deploy-green.outputs.idle-slot }}
-          IMAGE_TAG:   ${{ needs.docker-push.outputs.image-tag }}
+          IDLE_SLOT: ${{ needs.deploy-green.outputs.idle-slot }}
+          IMAGE_TAG: ${{ needs.docker-push.outputs.image-tag }}
         run: |
           MANIFEST=$(aws ecr batch-get-image \
             --repository-name ${{ env.ECR_REPO }} \
@@ -363,9 +362,9 @@ jobs:
 
           echo "Tagged $IMAGE_TAG as :${DEPLOY_SLOT} (now live)"
 
-# ─────────────────────────────────────────────────────────────
-# JOB 6 — Monitor post-switch and auto-rollback if alarms fire
-# ─────────────────────────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # JOB 6 — Monitor post-switch and auto-rollback if alarms fire
+  # ─────────────────────────────────────────────────────────────
   monitor-and-rollback:
     name: Post-Deploy Monitor (60s)
     runs-on: ubuntu-latest
@@ -378,16 +377,35 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Watch CloudWatch alarms — rollback if triggered
         env:
           DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
-          IDLE_SLOT:   ${{ needs.deploy-green.outputs.idle-slot }}
-          WATCH_SECS:  300           # watch for 5 minutes post-switch
-          POLL_SECS:   10
+          IDLE_SLOT: ${{ needs.deploy-green.outputs.idle-slot }}
+          WATCH_SECS: 300 # watch for 5 minutes post-switch
+          POLL_SECS: 10
         run: |
-          chmod +x scripts/rollback.sh
+          chmod +x ./scripts/rollback.sh
           ./scripts/rollback.sh
+
+      - name: Get Terraform outputs
+        id: tf_outputs
+        run: |
+          cd infra
+          echo "TG_GREEN_ARN=$(terraform output -raw target_group_green_arn)" >> $GITHUB_OUTPUT
+          echo "TG_BLUE_ARN=$(terraform output -raw target_group_blue_arn)" >> $GITHUB_OUTPUT
+          echo "ALB_LISTENER_ARN=$(terraform output -raw alb_listener_arn)" >> $GITHUB_OUTPUT
+
+      - name: Switch traffic to green
+        env:
+          TG_GREEN_ARN: ${{ steps.tf_outputs.outputs.TG_GREEN_ARN }}
+          TG_BLUE_ARN: ${{ steps.tf_outputs.outputs.TG_BLUE_ARN }}
+          ALB_LISTENER_ARN: ${{ steps.tf_outputs.outputs.ALB_LISTENER_ARN }}
+          DEPLOY_SLOT: green
+          IDLE_SLOT: blue
+        run: |
+          chmod +x ./scripts/switch-traffic.sh
+          ./scripts/switch-traffic.sh
