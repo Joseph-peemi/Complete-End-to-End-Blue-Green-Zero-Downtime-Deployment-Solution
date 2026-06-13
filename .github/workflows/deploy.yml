@@ -320,7 +320,7 @@ jobs:
   switch-traffic:
     name: Switch Traffic to Green
     runs-on: ubuntu-latest
-    needs: [deploy-green, health-check]
+    needs: [docker-push, deploy-green, health-check] # only switch if build, deploy and health check all succeed
     environment: production # requires manual approval in GitHub UI
 
     steps:
@@ -337,6 +337,23 @@ jobs:
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
 
+      - name: Debug — verify all inputs
+        run: |
+          echo "DEPLOY_SLOT : ${{ needs.deploy-green.outputs.deploy-slot }}"
+          echo "IDLE_SLOT   : ${{ needs.deploy-green.outputs.idle-slot }}"
+          echo "IMAGE_TAG   : ${{ needs.docker-push.outputs.image-tag }}"
+          echo "IMAGE_URI   : ${{ needs.docker-push.outputs.image-uri }}"
+
+          if [[ -z "${{ needs.deploy-green.outputs.deploy-slot }}" ]]; then
+            echo "ERROR: deploy-slot output is empty"
+            exit 1
+          fi
+
+          if [[ -z "${{ needs.docker-push.outputs.image-tag }}" ]]; then
+            echo "ERROR: image-tag output is empty"
+            exit 1
+          fi
+
       - name: Switch ALB traffic
         env:
           DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
@@ -352,19 +369,40 @@ jobs:
           IDLE_SLOT: ${{ needs.deploy-green.outputs.idle-slot }}
           IMAGE_TAG: ${{ needs.docker-push.outputs.image-tag }}
         run: |
+          echo "Retagging ${IMAGE_TAG} as ${DEPLOY_SLOT}..."
+
+          # Verify IMAGE_TAG is not empty
+          if [[ -z "${IMAGE_TAG}" ]]; then
+            echo "ERROR: IMAGE_TAG is empty — cannot retag"
+            exit 1
+          fi
+
+          # Verify the image exists in ECR first
+          aws ecr describe-images \
+            --repository-name ${{ env.ECR_REPO }} \
+            --image-ids imageTag="${IMAGE_TAG}" \
+            --query 'imageDetails[0].imageTags' \
+            --output text
+
+          # Get the manifest
           MANIFEST=$(aws ecr batch-get-image \
             --repository-name ${{ env.ECR_REPO }} \
-            --image-ids imageTag=${IMAGE_TAG} \
+            --image-ids imageTag="${IMAGE_TAG}" \
             --query 'images[0].imageManifest' \
             --output text)
 
-          # New live image gets the deploy slot colour tag
+          if [[ -z "${MANIFEST}" ]]; then
+            echo "ERROR: Could not fetch manifest for ${IMAGE_TAG}"
+            exit 1
+          fi
+
+          # Apply the colour tag
           aws ecr put-image \
             --repository-name ${{ env.ECR_REPO }} \
-            --image-tag ${DEPLOY_SLOT} \
-            --image-manifest "$MANIFEST"
+            --image-tag "${DEPLOY_SLOT}" \
+            --image-manifest "${MANIFEST}"
 
-          echo "Tagged $IMAGE_TAG as :${DEPLOY_SLOT} (now live)"
+          echo "Successfully tagged ${IMAGE_TAG} as :${DEPLOY_SLOT}"
 
   # ─────────────────────────────────────────────────────────────
   # JOB 6 — Monitor post-switch and auto-rollback if alarms fire
