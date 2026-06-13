@@ -354,14 +354,14 @@ jobs:
         run: |
           MANIFEST=$(aws ecr batch-get-image \
             --repository-name ${{ env.ECR_REPO }} \
-            --image-ids imageTag=$IMAGE_TAG \
+            --image-ids imageTag=${IMAGE_TAG} \
             --query 'images[0].imageManifest' \
             --output text)
 
           # New live image gets the deploy slot colour tag
           aws ecr put-image \
             --repository-name ${{ env.ECR_REPO }} \
-            --image-tag $DEPLOY_SLOT \
+            --image-tag ${DEPLOY_SLOT} \
             --image-manifest "$MANIFEST"
 
           echo "Tagged $IMAGE_TAG as :${DEPLOY_SLOT} (now live)"
