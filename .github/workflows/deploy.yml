@@ -109,25 +109,41 @@ jobs:
           echo "IMAGE_URI : ${IMAGE_URI}"
           cat $GITHUB_OUTPUT
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
+          file: ./Dockerfile
           push: true
           tags: |
             ${{ steps.meta.outputs.ecr-url }}
             ${{ steps.meta.outputs.ecr-url }}:candidate
           cache-from: type=registry,ref=${{ steps.meta.outputs.ecr-url }}:candidate
           cache-to: type=inline # reuses layers from :candidate on next run
-      - name: Verify image exists in ECR
+      - name: Confirm what landed in ECR
         run: |
-          echo "Expecting tag: ${{ steps.meta.outputs.image-tag }}"
-
-          aws ecr describe-images \
+          echo "=== All ECR tags after push ==="
+          aws ecr list-images \
             --repository-name ${{ env.ECR_REPO }} \
-            --image-ids imageTag="${{ steps.meta.outputs.image-tag }}" \
-            --query 'imageDetails[0].{Tags:imageTags,Digest:imageDigest}' \
+            --query 'imageIds[*].imageTag' \
             --output table
+
+          echo "=== Looking for: ${{ steps.meta.outputs.image-tag }} ==="
+          FOUND=$(aws ecr list-images \
+            --repository-name ${{ env.ECR_REPO }} \
+            --query "imageIds[?imageTag=='${{ steps.meta.outputs.image-tag }}'].imageTag" \
+            --output text)
+
+          if [[ -z "${FOUND}" ]]; then
+            echo "ERROR: Tag ${{ steps.meta.outputs.image-tag }} not found in ECR"
+            echo "The push did not land with the expected tag"
+            exit 1
+          fi
+
+          echo "SUCCESS: Found tag ${FOUND} in ECR"
       - name: Pull image from ECR
         run: |
           docker pull "${{ steps.meta.outputs.image-uri }}"
