@@ -199,24 +199,38 @@ jobs:
           SLOT=${{ steps.slot.outputs.deploy-slot }}
           IMAGE_URI=${{ needs.docker-push.outputs.image-uri }}
 
-          # Fetch current task def, swap the image, strip read-only fields
-          NEW_TASK=$(aws ecs describe-task-definition \
-            --task-definition aspnetapp-${SLOT} \
-            --query 'taskDefinition' \
-            --output json \
-          | jq --arg IMAGE "$IMAGE_URI" \
-            '.containerDefinitions[0].image = $IMAGE |
-             del(.taskDefinitionArn, .revision, .status,
-                 .requiresAttributes, .compatibilities,
-                 .registeredAt, .registeredBy)')
+          TASK_FAMILY="aspnetapp-${SLOT}"
+
+          echo "Using task family: $TASK_FAMILY"
+
+          aws ecs describe-task-definition \
+            --task-definition "$TASK_FAMILY" \
+            --query taskDefinition \
+            --output json > taskdef.json
+
+          cat taskdef.json
+
+          jq --arg IMAGE "$IMAGE_URI" '
+            .containerDefinitions[0].image = $IMAGE |
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+          ' taskdef.json > new-taskdef.json
+
+          cat new-taskdef.json
 
           TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --cli-input-json "$NEW_TASK" \
+            --cli-input-json file://new-taskdef.json \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          echo "task-def-arn=${TASK_DEF_ARN}" >> $GITHUB_OUTPUT
-          echo "Registered: $TASK_DEF_ARN"
+          echo "task-def-arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
 
       - name: Deploy to idle ECS service
         run: |
