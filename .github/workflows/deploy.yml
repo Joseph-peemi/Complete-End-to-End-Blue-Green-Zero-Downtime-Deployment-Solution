@@ -334,13 +334,17 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Switch ALB weights
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Switch ALB traffic
         env:
           DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
           IDLE_SLOT: ${{ needs.deploy-green.outputs.idle-slot }}
-        run: |
-          chmod +x ./scripts/switch-traffic.sh
-          ./scripts/switch-traffic.sh
+          ALB_LISTENER_ARN: ${{ secrets.ALB_LISTENER_ARN }}
+          TG_BLUE_ARN: ${{ secrets.TG_BLUE_ARN }}
+          TG_GREEN_ARN: ${{ secrets.TG_GREEN_ARN }}
+        run: ./scripts/switch-traffic.sh
 
       - name: Retag images (blue = previous stable)
         env:
