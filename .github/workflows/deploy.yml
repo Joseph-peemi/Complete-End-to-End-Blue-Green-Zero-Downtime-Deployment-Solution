@@ -68,7 +68,7 @@ jobs:
   docker-push:
     name: Docker Build & ECR Push
     runs-on: ubuntu-latest
-    needs: build-and-test # only runs if tests pass
+    needs: build-and-test
 
     outputs:
       image-tag: ${{ steps.meta.outputs.image-tag }}
@@ -84,68 +84,72 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
       - name: Login to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Generate image tags
         id: meta
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REPOSITORY: ${{ env.ECR_REPO }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Use FULL SHA — no cutting, no mismatch possible
-          SHA="${{ github.sha }}"
-          ECR_URL="${{ steps.ecr-login.outputs.registry }}/${{ env.ECR_REPO }}"
-          IMAGE_TAG="sha-${SHA}"
-          IMAGE_URI="${ECR_URL}:${IMAGE_TAG}"
+          IMAGE_URI="${REGISTRY}/${REPOSITORY}:sha-${IMAGE_TAG}"
 
-          echo "image-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
-          echo "image-uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
-          echo "ecr-url=${ECR_URL}"     >> $GITHUB_OUTPUT
+          echo "image-tag=sha-${IMAGE_TAG}" >> $GITHUB_OUTPUT
+          echo "image-uri=${IMAGE_URI}"     >> $GITHUB_OUTPUT
+          echo "registry=${REGISTRY}"       >> $GITHUB_OUTPUT
 
-          echo "=== Tags ==="
-          echo "SHA       : ${SHA}"
-          echo "IMAGE_TAG : ${IMAGE_TAG}"
-          echo "IMAGE_URI : ${IMAGE_URI}"
-      #         echo "ECR_URL   : ${ECR_URL}"
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+          echo "REGISTRY   : ${REGISTRY}"
+          echo "REPOSITORY : ${REPOSITORY}"
+          echo "IMAGE_TAG  : sha-${IMAGE_TAG}"
+          echo "IMAGE_URI  : ${IMAGE_URI}"
 
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          push: true
-          tags: |
-            ${{ steps.meta.outputs.ecr-url }}
-            ${{ steps.meta.outputs.ecr-url }}:candidate
-          cache-from: type=registry,ref=${{ steps.meta.outputs.ecr-url }}:candidate
-          cache-to: type=inline # reuses layers from :candidate on next run
-      - name: Confirm what landed in ECR
+      - name: Build, tag and push image to ECR
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          REPOSITORY: ${{ env.ECR_REPO }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          echo "=== All ECR tags after push ==="
-          aws ecr list-images \
+          # Build with full SHA tag — exact pattern: sha-<40charSHA>
+          docker build \
+            -t $REGISTRY/$REPOSITORY:sha-$IMAGE_TAG \
+            -t $REGISTRY/$REPOSITORY:candidate \
+            -f ./Dockerfile \
+            .
+
+          echo "=== Built images ==="
+          docker images | grep $REPOSITORY
+
+          # Push SHA tag
+          echo "Pushing sha-${IMAGE_TAG}..."
+          docker push $REGISTRY/$REPOSITORY:sha-$IMAGE_TAG
+
+          # Push candidate tag
+          echo "Pushing candidate..."
+          docker push $REGISTRY/$REPOSITORY:candidate
+
+          echo "Both tags pushed"
+
+      - name: Verify image in ECR
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "Verifying: sha-${IMAGE_TAG}"
+
+          aws ecr describe-images \
             --repository-name ${{ env.ECR_REPO }} \
-            --query 'imageIds[*].imageTag' \
+            --image-ids imageTag="sha-${IMAGE_TAG}" \
+            --query 'imageDetails[0].{PushedAt:imagePushedAt,Tags:imageTags}' \
             --output table
 
-          echo "=== Looking for: ${{ steps.meta.outputs.image-tag }} ==="
-          FOUND=$(aws ecr list-images \
-            --repository-name ${{ env.ECR_REPO }} \
-            --query "imageIds[?imageTag=='${{ steps.meta.outputs.image-tag }}'].imageTag" \
-            --output text)
+          echo "SUCCESS"
 
-          if [[ -z "${FOUND}" ]]; then
-            echo "ERROR: Tag ${{ steps.meta.outputs.image-tag }} not found in ECR"
-            echo "The push did not land with the expected tag"
-            exit 1
-          fi
-
-          echo "SUCCESS: Found tag ${FOUND} in ECR"
       - name: Pull image from ECR
-        run: |
-          docker pull "${{ steps.meta.outputs.image-uri }}"
+        run: docker pull "${{ steps.meta.outputs.image-uri }}"
 
-      # Informational scan — shows full report, never blocks
       - name: Trivy report
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -155,7 +159,6 @@ jobs:
           severity: CRITICAL,HIGH
           scanners: vuln
 
-      # Gate — fails pipeline on CRITICAL CVEs
       - name: Trivy gate
         uses: aquasecurity/trivy-action@v0.36.0
         with:
