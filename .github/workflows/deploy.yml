@@ -430,11 +430,11 @@ jobs:
 
       - name: Switch traffic to green
         env:
-          TG_GREEN_ARN: ${{ steps.tf_outputs.outputs.TG_GREEN_ARN }}
-          TG_BLUE_ARN: ${{ steps.tf_outputs.outputs.TG_BLUE_ARN }}
-          ALB_LISTENER_ARN: ${{ steps.tf_outputs.outputs.ALB_LISTENER_ARN }}
-          DEPLOY_SLOT: green
-          IDLE_SLOT: blue
+          TG_GREEN_ARN: ${{ secrets.TG_GREEN_ARN }}
+          TG_BLUE_ARN: ${{ secrets.TG_BLUE_ARN }}
+          ALB_LISTENER_ARN: ${{ secrets.ALB_LISTENER_ARN }}
+          DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
+          IDLE_SLOT: ${{ needs.deploy-green.outputs.idle-slot }}
         run: |
           chmod +x ./scripts/switch-traffic.sh
           ./scripts/switch-traffic.sh
