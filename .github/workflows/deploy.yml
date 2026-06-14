@@ -105,7 +105,7 @@ jobs:
           echo "SHA       : ${SHA}"
           echo "IMAGE_TAG : ${IMAGE_TAG}"
           echo "IMAGE_URI : ${IMAGE_URI}"
-
+      #         echo "ECR_URL   : ${ECR_URL}"
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
