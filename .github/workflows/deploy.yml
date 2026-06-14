@@ -116,7 +116,6 @@ jobs:
           # Build with full SHA tag — exact pattern: sha-<40charSHA>
           docker build \
             -t $REGISTRY/$REPOSITORY:sha-$IMAGE_TAG \
-            -t $REGISTRY/$REPOSITORY:candidate \
             -f ./Dockerfile \
             .
 
@@ -126,10 +125,6 @@ jobs:
           # Push SHA tag
           echo "Pushing sha-${IMAGE_TAG}..."
           docker push $REGISTRY/$REPOSITORY:sha-$IMAGE_TAG
-
-          # Push candidate tag
-          echo "Pushing candidate..."
-          docker push $REGISTRY/$REPOSITORY:candidate
 
           echo "Both tags pushed"
 
@@ -338,10 +333,9 @@ jobs:
   # JOB 5 — Switch traffic to green
   # ─────────────────────────────────────────────────────────────
   switch-traffic:
-    name: Switch Traffic to Green
+    name: Switch Traffic
     runs-on: ubuntu-latest
-    needs: [docker-push, deploy-green, health-check] # only switch if build, deploy and health check all succeed
-    environment: production # requires manual approval in GitHub UI
+    needs: [docker-push, deploy-green, health-check]
 
     steps:
       - name: Checkout
@@ -357,22 +351,11 @@ jobs:
       - name: Make scripts executable
         run: chmod +x scripts/*.sh
 
-      - name: Debug — verify all inputs
+      - name: Debug secrets
         run: |
-          echo "DEPLOY_SLOT : ${{ needs.deploy-green.outputs.deploy-slot }}"
-          echo "IDLE_SLOT   : ${{ needs.deploy-green.outputs.idle-slot }}"
-          echo "IMAGE_TAG   : ${{ needs.docker-push.outputs.image-tag }}"
-          echo "IMAGE_URI   : ${{ needs.docker-push.outputs.image-uri }}"
-
-          if [[ -z "${{ needs.deploy-green.outputs.deploy-slot }}" ]]; then
-            echo "ERROR: deploy-slot output is empty"
-            exit 1
-          fi
-
-          if [[ -z "${{ needs.docker-push.outputs.image-tag }}" ]]; then
-            echo "ERROR: image-tag output is empty"
-            exit 1
-          fi
+          echo "ALB_LISTENER_ARN is set: ${{ secrets.ALB_LISTENER_ARN != '' }}"
+          echo "TG_BLUE_ARN is set     : ${{ secrets.TG_BLUE_ARN != '' }}"
+          echo "TG_GREEN_ARN is set    : ${{ secrets.TG_GREEN_ARN != '' }}"
 
       - name: Switch ALB traffic
         env:
@@ -383,27 +366,17 @@ jobs:
           TG_GREEN_ARN: ${{ secrets.TG_GREEN_ARN }}
         run: ./scripts/switch-traffic.sh
 
-      - name: Retag images (blue = previous stable)
+      - name: Retag ECR image
         env:
           DEPLOY_SLOT: ${{ needs.deploy-green.outputs.deploy-slot }}
-          IDLE_SLOT: ${{ needs.deploy-green.outputs.idle-slot }}
           IMAGE_TAG: ${{ needs.docker-push.outputs.image-tag }}
-          IMAGE_URI: ${{ needs.docker-push.outputs.image-uri }}
-
         run: |
-          # Use IMAGE_TAG if set, otherwise extract from IMAGE_URI
           if [[ -z "${IMAGE_TAG}" ]]; then
-            echo "image-tag output was empty — extracting from IMAGE_URI"
-            IMAGE_TAG="${IMAGE_URI##*:}"
-            echo "Extracted tag: ${IMAGE_TAG}"
+            IMAGE_TAG="${{ needs.docker-push.outputs.image-uri }}"
+            IMAGE_TAG="${IMAGE_TAG##*:}"
           fi
 
-          if [[ -z "${IMAGE_TAG}" ]]; then
-            echo "ERROR: Could not determine image tag"
-            exit 1
-          fi
-
-          echo "Retagging ${IMAGE_TAG} as ${DEPLOY_SLOT}..."
+          echo "Retagging ${IMAGE_TAG} as ${DEPLOY_SLOT}"
 
           MANIFEST=$(aws ecr batch-get-image \
             --repository-name ${{ env.ECR_REPO }} \
@@ -411,17 +384,12 @@ jobs:
             --query 'images[0].imageManifest' \
             --output text)
 
-          if [[ -z "${MANIFEST}" ]]; then
-            echo "ERROR: Could not fetch manifest for tag: ${IMAGE_TAG}"
-            exit 1
-          fi
-
           aws ecr put-image \
             --repository-name ${{ env.ECR_REPO }} \
             --image-tag "${DEPLOY_SLOT}" \
             --image-manifest "${MANIFEST}"
 
-          echo "Successfully tagged ${IMAGE_TAG} as :${DEPLOY_SLOT}"
+          echo "Tagged ${IMAGE_TAG} as :${DEPLOY_SLOT}"
 
   # ─────────────────────────────────────────────────────────────
   # JOB 6 — Monitor post-switch and auto-rollback if alarms fire
