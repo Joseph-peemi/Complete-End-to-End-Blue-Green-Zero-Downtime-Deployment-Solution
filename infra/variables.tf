@@ -83,7 +83,7 @@ variable "service_desired_count" {
 variable "alert_email" {
   description = "Email address to receive CloudWatch alarm notifications"
   type        = string
-  default     = "peemi9522@gmail.com"
+  default     = "peemijoe9522@gmail.com"
 }
 
 variable "domain_name" {
